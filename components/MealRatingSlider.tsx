@@ -2,11 +2,15 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated } from "react-native"
 
-type MealRatingSliderProps = {
-  meals: string[]
-}
+export type MealRatingSliderProps = {
+  meals: string[];
+  onRatingSubmit: (mealType: string, rating: number, feedback: string) => void;
+  ratingPeriodActive: boolean;
+  hasRated: boolean;
+  activeMeal: string | null;
+};
 
-export const MealRatingSlider: React.FC<MealRatingSliderProps> = ({ meals }) => {
+export const MealRatingSlider: React.FC<MealRatingSliderProps> = ({ meals, onRatingSubmit }) => {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [ratings, setRatings] = useState<Record<string, number>>({})
   const [remarks, setRemarks] = useState<Record<string, string>>({})
@@ -134,6 +138,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     elevation: 2,
   },
+  
   submitButtonText: {
     color: "#fff",
     fontWeight: "600",

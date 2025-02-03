@@ -1,24 +1,168 @@
-import React, { useState } from "react"
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Image } from "react-native"
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack"
-import type { RootStackParamList } from "../App"
-import { MealRatingSlider } from "../components/MealRatingSlider"
-import { BellIcon } from "../components/BellIcon"
-import { ProfileIcon } from "../components/ProfileIcon"
-import { FoodIcon } from "../components/FoodIcon"
-import ratingImage from "../assets/rating-image.png"
+import React, { useState, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  Image,
+  TextInput,
+  Dimensions,
+  Alert,
+} from "react-native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { BellIcon } from "../components/BellIcon";
+import { ProfileIcon } from "../components/ProfileIcon";
+import { FoodIcon } from "../components/FoodIcon";
+import ratingImage from "../assets/rating-image.png";
+import axios from "axios";
 
-type FoodScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "Food">
+type RootStackParamList = {
+  Food: { rollNo: string };
+  Profile: { group: string; rollNo: string; password: string };
+};
+
+type FoodScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "Food">;
 
 type Props = {
-  navigation: FoodScreenNavigationProp
+  navigation: FoodScreenNavigationProp;
+  route: { params: { rollNo: string } };
+};
+
+interface MenuItem {
+  id: number;
+  dayOfWeek: string;
+  mealType: string;
+  menuItems: string;
+  date: string;
 }
 
-export default function FoodScreen({ navigation }: Props) {
-  const [messOffFrom, setMessOffFrom] = useState("")
-  const [messOffTo, setMessOffTo] = useState("")
+const { width } = Dimensions.get("window");
 
-  const meals = ["Breakfast", "Lunch", "Snacks", "Dinner"]
+export default function FoodScreen({ navigation, route }: Props) {
+  const [messOffFrom, setMessOffFrom] = useState("");
+  const [messOffTo, setMessOffTo] = useState("");
+  const [activeMeal, setActiveMeal] = useState<string | null>(null);
+  const [menuData, setMenuData] = useState<MenuItem[]>([]);
+
+  const { rollNo } = route.params;
+
+  const meals = ["Breakfast", "Lunch", "Snacks", "Dinner"];
+  const mealTimes = {
+    Breakfast: { start: 7, end: 22 },
+    Lunch: { start: 11, end: 22 },
+    Snacks: { start: 15, end: 22 },
+    Dinner: { start: 18, end: 22 },
+  };
+
+  useEffect(() => {
+    checkCurrentMeal();
+    fetchTodayMenu();
+    const interval = setInterval(checkCurrentMeal, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchTodayMenu = async () => {
+    try {
+      const response = await axios.get('https://messmanagement-2if9.onrender.com/menu/today');
+      setMenuData(response.data);
+    } catch (error) {
+      console.error('Error fetching menu:', error);
+      Alert.alert('Error', 'Failed to fetch today\'s menu');
+    }
+  };
+
+  const getMenuItems = (mealType: string) => {
+    const meal = menuData.find(item => item.mealType === mealType.toUpperCase());
+    return meal ? meal.menuItems : 'Menu not available';
+  };
+
+  const checkCurrentMeal = () => {
+    const currentHour = new Date().getHours();
+    const currentMeal = meals.find((meal) => {
+      const timeSlot = mealTimes[meal as keyof typeof mealTimes];
+      return currentHour >= timeSlot.start && currentHour < timeSlot.end;
+    });
+    setActiveMeal(currentMeal || null);
+  };
+
+  const MealRatingCard = ({ meal }: { meal: string }) => {
+    const [mealRating, setMealRating] = useState(0);
+    const [mealFeedback, setMealFeedback] = useState("");
+    const [hasRatedMeal, setHasRatedMeal] = useState(false);
+
+    const timeSlot = mealTimes[meal as keyof typeof mealTimes];
+    const currentHour = new Date().getHours();
+    const isActive = currentHour >= timeSlot.start && currentHour < timeSlot.end;
+
+    const handleMealSubmit = async () => {
+      if (mealRating === 0) {
+        Alert.alert("Invalid Rating", "Please select a rating before submitting.");
+        return;
+      }
+
+      try {
+        await axios.post("https://food-rating-p3l3.onrender.com/ratings/submit", {
+          rollNumber: rollNo,
+          mealType: meal,
+          rating: mealRating,
+          feedback: mealFeedback,
+        });
+        Alert.alert("Success", `${meal} rating submitted successfully!`);
+        setMealRating(0);
+        setMealFeedback("");
+        setHasRatedMeal(true);
+      } catch (error) {
+        Alert.alert("Error", "Failed to submit rating. Please try again.");
+      }
+    };
+
+    return (
+      <View style={styles.ratingContainer}>
+        <Text style={styles.mealTitle}>{meal}</Text>
+        <Text style={styles.timeSlotText}>
+          Rating available from {timeSlot.start}:00 to {timeSlot.end}:00
+        </Text>
+
+        <View style={styles.ratingStars}>
+          {[1, 2, 3, 4, 5].map((star) => (
+            <TouchableOpacity
+              key={star}
+              onPress={() => setMealRating(star)}
+              style={styles.starButton}
+              disabled={!isActive || hasRatedMeal}
+            >
+              <Text style={[ 
+                styles.star, 
+                mealRating >= star && styles.starSelected,
+                (!isActive || hasRatedMeal) && styles.starDisabled
+              ]}>★</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TextInput
+          style={[styles.feedbackInput, (!isActive || hasRatedMeal) && styles.disabledInput]}
+          placeholder={isActive ? "Share your feedback..." : "Feedback closed for this meal"}
+          value={mealFeedback}
+          onChangeText={setMealFeedback}
+          multiline
+          editable={isActive && !hasRatedMeal}
+        />
+
+        <TouchableOpacity
+          style={[styles.submitButton, (!isActive || hasRatedMeal) && styles.submitButtonDisabled]}
+          onPress={handleMealSubmit}
+          disabled={!isActive || hasRatedMeal}
+        >
+          <Text style={styles.submitButtonText}>
+            {hasRatedMeal ? "Already Rated" : isActive ? "Submit Rating" : "Rating Closed"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -38,7 +182,12 @@ export default function FoodScreen({ navigation }: Props) {
             <Text style={styles.sectionTitle}>Today's Menu Specials</Text>
           </View>
           <Image source={ratingImage} style={styles.ratingImage} />
-          <MealRatingSlider meals={meals} />
+
+          <ScrollView horizontal={true} style={styles.horizontalScroll}>
+            {meals.map((meal) => (
+              <MealRatingCard key={meal} meal={meal} />
+            ))}
+          </ScrollView>
 
           <View style={styles.menuList}>
             {meals.map((meal, index) => (
@@ -49,18 +198,14 @@ export default function FoodScreen({ navigation }: Props) {
                     {index === 0
                       ? "07:30-9:45 AM"
                       : index === 1
-                        ? "12:30-2:15 PM"
-                        : index === 2
-                          ? "04:30-5:45 PM"
-                          : "7:30-9:30 PM"}
+                      ? "12:30-2:15 PM"
+                      : index === 2
+                      ? "04:30-5:45 PM"
+                      : "7:30-9:30 PM"}
                   </Text>
                 </View>
                 <Text style={styles.menuDescription}>
-                  {index === 0
-                    ? "Aloo parathe, Dahi and chai"
-                    : index === 1 || index === 2
-                      ? "Rajma, Roti, Rice, Salad and Dahi"
-                      : "Mix Veg, Dal, Roti, and Rice"}
+                  {getMenuItems(meal)}
                 </Text>
               </View>
             ))}
@@ -94,11 +239,13 @@ export default function FoodScreen({ navigation }: Props) {
           </View>
 
           <Text style={styles.note}>
-            NOTE: You need to update your mess off status a day in advance if you plan to move outside. You can get skip
-            meal credit only if you update your mess off status before everyone by default. For Today; Punch 5 hrs
-            before the serving food.
+            NOTE: You need to update your mess off status a day in advance if you plan to move
+            outside. You can get skip meal credit only if you update your mess off status before
+            everyone by default. For Today; Punch 5 hrs before the serving food.
           </Text>
-          <Text style={styles.noteSubtext}>Be honest with your ratings, this will help all our community.</Text>
+          <Text style={styles.noteSubtext}>
+            Be honest with your ratings, this will help all our community.
+          </Text>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>made with ❤️</Text>
@@ -124,13 +271,13 @@ export default function FoodScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F0F4F8", 
+    backgroundColor: "#F0F4F8",
   },
   header: {
     flexDirection: "row",
@@ -158,6 +305,74 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+  },
+  horizontalScroll: {
+    marginBottom: 16,
+  },
+  ratingContainer: {
+    width: width * 0.7,
+    marginRight: 12,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 16,
+  },
+  mealTitle: {
+    fontSize: 24,
+    fontWeight: "600",
+    color: "#01519A",
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  timeSlotText: {
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  ratingStars: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  starButton: {
+    padding: 8,
+  },
+  star: {
+    fontSize: 32,
+    color: "#DDD",
+  },
+  starSelected: {
+    color: "#FFD700",
+  },
+  starDisabled: {
+    color: '#EEE',
+  },
+  feedbackInput: {
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 8,
+    padding: 12,
+    height: 100,
+    textAlignVertical: "top",
+    marginBottom: 16,
+  },
+  disabledInput: {
+    backgroundColor: '#F5F5F5',
+    borderColor: '#EEE',
+  },
+  submitButton: {
+    backgroundColor: "#01519A",
+    padding: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  submitButtonDisabled: {
+    backgroundColor: "#ccc",
+  },
+  submitButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
   menuList: {
     marginBottom: 16,
@@ -338,5 +553,4 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 32,
   },
-})
-
+});

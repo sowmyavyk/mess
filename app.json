@@ -1,7 +1,6 @@
 {
   "expo": {
     "name": "mess-feedback",
-    "assets": ["./assets/fonts/"],
     "slug": "mess-feedback",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,16 +11,33 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*",
+      "./assets/fonts/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+    "adaptiveIcon": {
+      "foregroundImage": "./assets/adaptive-icon.png",
+      "backgroundColor": "#ffffff"
+    },
+    "package": "com.messfeedback.app",
+    "versionCode": 1
+  },
+    "extra": {
+      "eas": {
+        "projectId": "3c7175bf-eb5e-4617-8512-de658655841a"
       }
-    }
+    },
+    "plugins": [
+      [
+      "expo-font",
+        {
+          "fonts": []
+        }
+    ]
+  ]
   }
 }
-

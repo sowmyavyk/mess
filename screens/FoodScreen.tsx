@@ -45,15 +45,14 @@ export default function FoodScreen({ navigation, route }: Props) {
   const [messOffTo, setMessOffTo] = useState("");
   const [activeMeal, setActiveMeal] = useState<string | null>(null);
   const [menuData, setMenuData] = useState<MenuItem[]>([]);
-
   const { rollNo } = route.params;
 
   const meals = ["Breakfast", "Lunch", "Snacks", "Dinner"];
   const mealTimes = {
-    Breakfast: { start: 7, end: 22 },
-    Lunch: { start: 11, end: 22 },
-    Snacks: { start: 15, end: 22 },
-    Dinner: { start: 18, end: 22 },
+    Breakfast: { start: 7, end: 10 },
+    Lunch: { start: 11, end: 15 },
+    Snacks: { start: 15, end: 18 },
+    Dinner: { start: 18, end: 23 },
   };
 
   useEffect(() => {
@@ -87,27 +86,51 @@ export default function FoodScreen({ navigation, route }: Props) {
     setActiveMeal(currentMeal || null);
   };
 
-  const MealRatingCard = ({ meal }: { meal: string }) => {
+  const MealRatingCard = ({ meal, rollNo }: { meal: string; rollNo: string }) => {
     const [mealRating, setMealRating] = useState(0);
     const [mealFeedback, setMealFeedback] = useState("");
     const [hasRatedMeal, setHasRatedMeal] = useState(false);
-
+    const [currentDate] = useState(new Date().toISOString().split("T")[0]); // Get current date in YYYY-MM-DD format
+  
     const timeSlot = mealTimes[meal as keyof typeof mealTimes];
     const currentHour = new Date().getHours();
     const isActive = currentHour >= timeSlot.start && currentHour < timeSlot.end;
-
+  
+    useEffect(() => {
+      const checkExistingRating = async () => {
+        try {
+          const response = await axios.get(
+            "https://food-rating-p3l3.onrender.com/ratings/check",
+            {
+              params: {
+                rollNumber: rollNo,
+                mealType: meal,
+                date: currentDate,
+              },
+            }
+          );
+          setHasRatedMeal(response.data.hasRated);
+        } catch (error) {
+          console.error("Error checking existing rating:", error);
+        }
+      };
+  
+      checkExistingRating();
+    }, [meal, rollNo, currentDate]);
+  
     const handleMealSubmit = async () => {
       if (mealRating === 0) {
         Alert.alert("Invalid Rating", "Please select a rating before submitting.");
         return;
       }
-
+  
       try {
         await axios.post("https://food-rating-p3l3.onrender.com/ratings/submit", {
           rollNumber: rollNo,
           mealType: meal,
           rating: mealRating,
           feedback: mealFeedback,
+          date: currentDate, // Include current date with submission
         });
         Alert.alert("Success", `${meal} rating submitted successfully!`);
         setMealRating(0);
@@ -116,7 +139,7 @@ export default function FoodScreen({ navigation, route }: Props) {
       } catch (error) {
         Alert.alert("Error", "Failed to submit rating. Please try again.");
       }
-    };
+    };  
 
     return (
       <View style={styles.ratingContainer}>
@@ -124,7 +147,6 @@ export default function FoodScreen({ navigation, route }: Props) {
         <Text style={styles.timeSlotText}>
           Rating available from {timeSlot.start}:00 to {timeSlot.end}:00
         </Text>
-
         <View style={styles.ratingStars}>
           {[1, 2, 3, 4, 5].map((star) => (
             <TouchableOpacity
@@ -150,6 +172,15 @@ export default function FoodScreen({ navigation, route }: Props) {
           multiline
           editable={isActive && !hasRatedMeal}
         />
+        <TouchableOpacity
+          style={[styles.submitButton, (!isActive || hasRatedMeal) && styles.submitButtonDisabled]}
+          onPress={handleMealSubmit}
+          disabled={!isActive || hasRatedMeal}
+        >
+          <Text style={styles.submitButtonText}>
+            {hasRatedMeal ? "Already Rated" : isActive ? "Submit Rating" : "Rating Closed"}
+          </Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.submitButton, (!isActive || hasRatedMeal) && styles.submitButtonDisabled]}
@@ -185,7 +216,7 @@ export default function FoodScreen({ navigation, route }: Props) {
 
           <ScrollView horizontal={true} style={styles.horizontalScroll}>
             {meals.map((meal) => (
-              <MealRatingCard key={meal} meal={meal} />
+              <MealRatingCard key={meal} meal={meal} rollNo={rollNo} />
             ))}
           </ScrollView>
 
